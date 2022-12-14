@@ -1,0 +1,105 @@
+#OS DISTRIBUTION: Ubuntu 18.04 Bionic Beaver LTS
+
+# CHAPTER 2.3 - Installing Docker
+
+# UPDATE apt PACKAGE INDEX AND INSTALL PACKAGES TO ALLOW apt TO USE REPO OVER HTTPS 
+sudo apt-get update
+
+sudo apt-get install \
+ca-certificates \
+curl \
+gnupg \
+lsb-release
+
+
+# ADD THE DOCKER'S OFFICIAL GPG KEY:
+sudo mkdir -p /etc/apt/keyrings
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+
+# SETUP REPO
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+$(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# RELOAD THE APT SOURCE LIST:
+sudo apt-get update
+
+# INSTALL DOCKER:
+sudo apt-get install -y docker-ce=18.06.1~ce~3-0~ubuntu 
+
+# PREVENT UPDATE
+sudo apt-mark hold docker-ce
+
+# CHECK VERSION
+sudo docker version
+
+
+
+
+# CHAPTER 2.4 - Installing Kubeadm, Kubelet, and Kubectl
+# https://learn.acloud.guru/course/2e0bad96-a602-4c91-9da2-e757d32abb8f/learn/56bea242-4b92-4bcb-ad80-f974467c8d7a/097bb262-1d4a-4870-9d1c-498ad730c348/watch
+
+# Now that Docker is installed, we are ready to install the Kubernetes components. In this lesson, I will guide you through the process of installing Kubeadm, Kubelet, and Kubectl on all three playground servers. After completing this lesson, you should be ready for the next step, which is to bootstrap the cluster.
+
+# Here are the commands used to install the Kubernetes components in this lesson. Run these on all three servers.
+
+# NOTE: There are some issues being reported when installing version 1.12.2-00 from the Kubernetes ubuntu repositories. Please use version 1.15.7-00 for kubelet, kubeadm, and kubectl.
+
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+cat << EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
+deb https://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+
+sudo apt-get update
+
+sudo apt-get install -y kubelet=1.15.7-00 kubeadm=1.15.7-00 kubectl=1.15.7-00
+
+sudo apt-mark hold kubelet kubeadm kubectl
+
+# After installing these components, verify that kubeadm is working by getting the version info.
+
+kubeadm version
+
+kubeadm join 172.31.11.169:6443 --token h02gr1.i739f3xfcee8m8fx \
+    --discovery-token-ca-cert-hash sha256:bbe59713dfb4c76a7cfea5d6b9d46b8ac0e6f93fa673d31e5aaf6e22359a10d2
+
+
+# CHAPTER 2.5 - Bootstrapping the cluster
+
+# RUN IN MASTER NODE
+# Initialize the cluster
+sudo  kubeadm init --pod-network-cidr=10.244.0.0/16
+
+# From Init output
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# RUN IN WORKER NODES
+# From MASTER NODE Init output
+kubeadm join 172.31.11.169:6443 --token h02gr1.i739f3xfcee8m8fx \
+    --discovery-token-ca-cert-hash sha256:bbe59713dfb4c76a7cfea5d6b9d46b8ac0e6f93fa673d31e5aaf6e22359a10d2
+
+# Check if worker nodes are added in MASTER NODE
+kubectl get nodes
+
+# CHAPTER 2.6 - Configuring Networ with Flannel
+
+# On all three nodes, run the following:
+echo "net.bridge.bridge-nf-call-iptables=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# in MASTER NODE
+# Install Flannel in the cluster
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel-old.yaml
+
+# Verify that all the nodes now have a STATUS of "Ready":
+kubectl get nodes
+
+# Check if Flannel pods are up and running
+kubectl get pods -n kube-system
+
+
